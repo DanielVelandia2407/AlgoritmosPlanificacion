@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>Planificador Round Robin</title>
     <style>
-                body {
+        body {
             font-family: Arial, sans-serif;
             max-width: 1200px;
             margin: 0 auto;
@@ -196,8 +196,6 @@
             height: 20px;
             border-radius: 4px;
         }
-        
-   
     </style>
 </head>
 <body>
@@ -323,7 +321,6 @@
     }
 
     function calculateRR() {
-
         setQuantum();
 
         if (processes.length === 0) {
@@ -336,15 +333,11 @@
             return;
         }
 
-
-
         let processQueue = JSON.parse(JSON.stringify(processes));
         let currentTime = 0;
         let completed = [];
         let timeline = [];
         let readyQueue = [];
-
-
 
         processQueue.sort((a, b) => a.arrivalTime - b.arrivalTime);
 
@@ -357,58 +350,70 @@
             if (readyQueue.length === 0) {
                 // Si no hay procesos listos, avanzar el tiempo
                 if (processQueue.length > 0) {
+                    timeline.push({
+                        name: 'BLOCKED',
+                        start: currentTime,
+                        duration: processQueue[0].arrivalTime - currentTime,
+                        state: 'blocked'
+                    });
                     currentTime = processQueue[0].arrivalTime;
                 }
                 continue;
             }
 
+            // Agregar estados de espera para los procesos no seleccionados
+            readyQueue.slice(1).forEach(wp => {
+                timeline.push({
+                    name: wp.name,
+                    start: currentTime,
+                    duration: Math.min(quantum, readyQueue[0].remainingTime),
+                    state: 'waiting'
+                });
+            });
+
             // Tomar el primer proceso de la cola
-            let seletedProcess = readyQueue.shift();
+            let selectedProcess = readyQueue.shift();
 
             // Verificar si es la primera vez que el proceso se ejecuta
-            if (seletedProcess.startTime === undefined) {
-                seletedProcess.startTime = currentTime;
+            if (selectedProcess.startTime === undefined) {
+                selectedProcess.startTime = currentTime;
             }
 
             // Ejecutar el proceso por el quantum o el tiempo restante, lo que sea menor
-            let executionTime = Math.min(seletedProcess.remainingTime, quantum);
+            let executionTime = Math.min(selectedProcess.remainingTime, quantum);
             timeline.push({
-                name: seletedProcess.name,
+                name: selectedProcess.name,
                 start: currentTime,
                 duration: executionTime,
                 state: 'running'
             });
 
-            
-
-            seletedProcess.remainingTime -= executionTime;
+            selectedProcess.remainingTime -= executionTime;
             currentTime += executionTime;
 
             // Si el proceso no ha terminado, volver a agregarlo a la cola
-            if (seletedProcess.remainingTime > 0) {
-                readyQueue.push(seletedProcess);
+            if (selectedProcess.remainingTime > 0) {
+                readyQueue.push(selectedProcess);
             } else {
                 // Calcular métricas del proceso completado
-                seletedProcess.completionTime = currentTime;
-                seletedProcess.turnaroundTime = seletedProcess.completionTime - seletedProcess.arrivalTime;
-                seletedProcess.waitingTime = seletedProcess.turnaroundTime - seletedProcess.burstTime;
-                seletedProcess.lostTime = seletedProcess.startTime - seletedProcess.arrivalTime;
-                seletedProcess.penalty = seletedProcess.turnaroundTime / seletedProcess.burstTime;
-                seletedProcess.responseTime = seletedProcess.startTime
-                    ? seletedProcess.startTime - seletedProcess.arrivalTime
+                selectedProcess.completionTime = currentTime;
+                selectedProcess.turnaroundTime = selectedProcess.completionTime - selectedProcess.arrivalTime;
+                selectedProcess.waitingTime = selectedProcess.turnaroundTime - selectedProcess.burstTime;
+                selectedProcess.lostTime = selectedProcess.startTime - selectedProcess.arrivalTime;
+                selectedProcess.penalty = selectedProcess.turnaroundTime / selectedProcess.burstTime;
+                selectedProcess.responseTime = selectedProcess.startTime
+                    ? selectedProcess.startTime - selectedProcess.arrivalTime
                     : 0;
 
-                completed.push(seletedProcess);
+                completed.push(selectedProcess);
             }
         }
 
         displayResults(completed);
         drawGanttChart(timeline);
-
-    
     }
 
-    function displayResults(completed) {
+        function displayResults(completed) {
         const tbody = document.getElementById('resultsTableBody');
         tbody.innerHTML = '';
 
@@ -476,15 +481,27 @@
             Math.max(max, item.start + item.duration), 0);
         const timeScale = 100 / totalTime;
 
-        timeline.forEach(item => {
-            const segment = document.createElement('div');
-            segment.className = `process-segment process-${item.state}`;
-            segment.style.width = `${item.duration * timeScale}%`;
-            segment.style.left = `${item.start * timeScale}%`;
-            segment.textContent = item.name;
-            ganttBars.appendChild(segment);
+        // Agrupar por proceso
+        const processes = [...new Set(timeline.map(item => item.name))];
+
+        processes.forEach(processName => {
+            const processTimeline = timeline.filter(item => item.name === processName);
+            const bar = document.createElement('div');
+            bar.className = 'process-bar';
+
+            processTimeline.forEach(item => {
+                const segment = document.createElement('div');
+                segment.className = `process-segment process-${item.state}`;
+                segment.style.width = `${item.duration * timeScale}%`;
+                segment.style.left = `${item.start * timeScale}%`;
+                segment.textContent = item.name;
+                bar.appendChild(segment);
+            });
+
+            ganttBars.appendChild(bar);
         });
 
+        // Crear marcadores de tiempo
         for (let i = 0; i <= totalTime; i++) {
             const marker = document.createElement('div');
             marker.className = 'time-marker';
